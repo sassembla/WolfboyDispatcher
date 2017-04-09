@@ -1,19 +1,16 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
+﻿using System.Text;
 using UnityEngine;
+using WolfboyDispatcher;
 
 
 /*
-	できてることがいくつかあって、
-	・特定の型を基礎にしたmessageの区別
-	・特定の型を基礎にしたmessageの処理
+	階層構造をもっているような状態で、上位はディスパッチャ経由で特定のクラスへとデータを流す。
+	下位はクラスとレシーバーをディスパッチャへと登録する。
 
-	・インスタンスが特定の型のmessageを受け取るReceiverを、特定の型から受け取るようにセット
-	・特定の型から、受け取り者の型を指定してデータを流す
+	というようなことを、wolfboyDispatcherはなんというか雑に可能にする。
+
+	同時にこのサンプルは、base型を持つデータを、一切登録せずに型指定とコンストラクタ指定のみで振り分ける、ということを達成している。
+	いや〜〜記述が少ないのはいいねえ。
  */
 public class SourceEmitter : MonoBehaviour {
 
@@ -37,7 +34,7 @@ public class SourceEmitter : MonoBehaviour {
 		// set nested receiver.
 		var u = new WantToReceiveMessage2();
 		// remove nested receiver.
-		// Dispatchers.DispatcherOf<WantToReceiveMessage1>().RemoveObserver<Message2>(u);
+		// Dispatchers<MessageBase>.DispatchRoute<WantToReceiveMessage1>().RemoveReceiver<Message2>(u);
 
 
 		// 擬似的なレシーブ動作
@@ -68,151 +65,20 @@ public class SourceEmitter : MonoBehaviour {
 			case BattleState.Running: {
 				// この時にイベントを受け取らせたいクラスを指定し、受け取り用に登録されているメソッドを着火する。
 				// 該当するデータ型のレシーバが登録されていなければ無視される。
-				Dispatchers.DispatcherOf<SourceEmitter>().SendTo<WantToReceiveMessage1>(data);
+				Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().SendTo<WantToReceiveMessage1>(data);
 				break;
 			}
 		}
 	}
 }
 
-
-public class Dispatchers {
-	/*
-		データ分配を行う型に対して、ディスパッチャーを返す辞書
-	 */
-	private static Dictionary<Type, Dispatcher> typeToReceiverDict = new Dictionary<Type, Dispatcher>();
-
-	/**
-		特定の型のDispatcherを取得/生成する
-	 */
-	public static Dispatcher DispatcherOf<T> () {
-		if (!typeToReceiverDict.ContainsKey(typeof(T))) {
-			// create and set.
-			typeToReceiverDict[typeof(T)] = new Dispatcher();
-		}
-
-		// return.
-		return typeToReceiverDict[typeof(T)];
-	}
-
-	public class Dispatcher {
-		
-		private Dictionary<Type, Dictionary<MessageType, Action<byte[]>>> receiverType_messageType_deserializeActionDict = new Dictionary<Type, Dictionary<MessageType, Action<byte[]>>>();
-		private Dictionary<Type, Dictionary<MessageType, Action<BaseMessage>>> receiverType_messageType_actionDict = new Dictionary<Type, Dictionary<MessageType, Action<BaseMessage>>>();
-
-		/**
-			セットされているレシーバーへと、byte[]を送付する
-		 */
-		public void SendTo<TypeOfReceiver> (byte[] data) {
-			if (receiverType_messageType_deserializeActionDict.ContainsKey(typeof(TypeOfReceiver))) {
-
-				// メッセージ型の特定
-				var dataStr = Encoding.UTF8.GetString(data);
-				var messageType = JsonUtility.FromJson<BaseMessage>(dataStr).type;
-
-				var actionList = receiverType_messageType_deserializeActionDict[typeof(TypeOfReceiver)];
-				if (actionList != null) {
-					foreach (var action in actionList) {
-						// このアクションのターゲットがこのデータの形式にマッチしなければ無視
-						if (messageType != action.Key) continue;
-
-						// 実行
-						action.Value(data);
-					}
-				}
-			}
-		}
-
-		/**
-			デシリアライズが済んでいるデータをそのまま次のディスパッチャへと伝える
-		 */
-		public void Relay<TypeOfReceiver> (BaseMessage dataSource) {
-			if (receiverType_messageType_actionDict.ContainsKey(typeof(TypeOfReceiver))) {
-				var actionList = receiverType_messageType_actionDict[typeof(TypeOfReceiver)];
-				foreach (var action in actionList) {
-					// このアクションのターゲットがこのkindでなければ無視
-					if (dataSource.type != action.Key) continue;
-
-					// 実行
-					action.Value(dataSource);
-				}
-			}
-		}
-
-		/**
-			特定の型に対して、特定のメッセージ型が来た時に実行するメソッドを登録
-		*/
-		public void SetObserver<T> (Action<T> action) where T : BaseMessage, new() {
-			Debug.Assert(action.Target != null, "action should be defined as function. not lambda.");
-			var actionOwnerType = action.Target.GetType();
-			var kind = new T().type;
-
-			{
-				if (!receiverType_messageType_actionDict.ContainsKey(actionOwnerType)) {
-					receiverType_messageType_actionDict[actionOwnerType] = new Dictionary<MessageType, Action<BaseMessage>>();
-				}
-
-				/*
-					non deserialized data transfer.
-					deserialized data -> execute action.
-				*/
-				Action<BaseMessage> executeAct = deserializedData => {
-					// execute act.
-					action((T)deserializedData);
-				};
-				
-				receiverType_messageType_actionDict[actionOwnerType][kind] = executeAct;
-			}
-
-			{
-				if (!receiverType_messageType_deserializeActionDict.ContainsKey(actionOwnerType)) {
-					receiverType_messageType_deserializeActionDict[actionOwnerType] = new Dictionary<MessageType, Action<byte[]>>();
-				}
-
-				/*
-					deserialize and transfer action.
-					byte -> data type -> execute action.
-				*/
-				Action<byte[]> deserializeAndExecuteAct = baseDataBytes => {
-
-
-					// bytes to str.
-					var baseDataStr = Encoding.UTF8.GetString(baseDataBytes);
-
-					// deserialize dataStr to specific typed instance.
-					var receivedData = JsonUtility.FromJson<T>(baseDataStr);
-
-					// execute act.
-					action((T)receivedData);
-				};
-
-				receiverType_messageType_deserializeActionDict[actionOwnerType][kind] = deserializeAndExecuteAct;
-			}
-		}
-
-		public void RemoveObserver<T> (object actionOwner) where T : BaseMessage, new() {
-			var actionOwnerType = actionOwner.GetType();
-			var kind = new T().type;
-
-			if (receiverType_messageType_actionDict.ContainsKey(actionOwnerType)) {
-				receiverType_messageType_actionDict[actionOwnerType].Remove(kind);
-			}
-
-			if (receiverType_messageType_deserializeActionDict.ContainsKey(actionOwnerType)) {
-				receiverType_messageType_deserializeActionDict[actionOwnerType].Remove(kind);
-			}
-		}
-	}
-}
-
-
 /**
 	この型は、特定のメッセージだけを、特定のオブザーバで受け取りたい。
  */
 public class WantToReceiveMessage1 {
 	public WantToReceiveMessage1 () {
-		Dispatchers.DispatcherOf<SourceEmitter>().SetObserver<Message1>(ReceiveMessage1);
-		Dispatchers.DispatcherOf<SourceEmitter>().SetObserver<Message2>(ReceiveMessage2);
+		Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().SetReceiver<Message1>(ReceiveMessage1);
+		Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().SetReceiver<Message2>(ReceiveMessage2);
 	}
 
 	public void ReceiveMessage1 (Message1 data) {
@@ -223,13 +89,13 @@ public class WantToReceiveMessage1 {
 		Debug.LogError("ReceiveMessage2 received data:" + data.param2);
 
 		// ここでは、すでにデータがデシリアライズされてしまっている。ので、これをそのまま次のディスパッチャに渡す方法が欲しい。
-		Dispatchers.DispatcherOf<WantToReceiveMessage1>().Relay<WantToReceiveMessage2>(data);
+		Dispatchers<MessageBase>.DispatchRoute<WantToReceiveMessage1>().Relay<WantToReceiveMessage2>(data);
 	}
 }
 
 public class WantToReceiveMessage2 {
 	public WantToReceiveMessage2 () {
-		Dispatchers.DispatcherOf<WantToReceiveMessage1>().SetObserver<Message2>(Receiver);
+		Dispatchers<MessageBase>.DispatchRoute<WantToReceiveMessage1>().SetReceiver<Message2>(Receiver);
 	}
 
 	public void Receiver (Message2 data) {
@@ -249,23 +115,24 @@ public enum MessageType {
 
 
 /**
-	型定義
+	通信でデータが飛んでくる用の型定義
+	その基礎となる型
  */
-public class BaseMessage {
+public class MessageBase {
 	public MessageType type;
-	public BaseMessage (MessageType type) {
+	public MessageBase (MessageType type) {
 		this.type = type;
 	}
 }
 
-public class Message1 : BaseMessage {
+public class Message1 : MessageBase {
 	public string param;
 	public Message1 () : base (MessageType._1) {
 
 	}
 }
 
-public class Message2 : BaseMessage {
+public class Message2 : MessageBase {
 	public string param2;
 
 	// パラメータ付きコンストラクタを持つ場合は、デフォルトコンストラクタの定義も必要になってしまう。
@@ -279,3 +146,33 @@ public class Message2 : BaseMessage {
 }
 
 
+/*
+	通信で流すデータとして、MessageBaseとそれを拡張した型があるとき、
+	そのMessageBaseに何らかのパラメータを持たせ、拡張した型がなんなのかを見分けたい、みたいなのがあると思う。
+	
+	このクラスでは、その判別手段を提供する。
+	本当はMessageBaseにこれらの機能を提供したいんだけど、サーバとかでも同じ型を分解したい = 型情報をClient - Serverで共有したい、というニーズがあり。
+	それを前提としていることで、こんな感じで別途定義している。
+ */
+public class TypeIdentificationResolver {
+	public static MessageType DetermineMessageType (byte[] data) {
+		var dataStr = Encoding.UTF8.GetString(data);
+		return JsonUtility.FromJson<MessageBase>(dataStr).type;
+	}
+
+	public static MessageType DetermineMessageType (MessageBase data) {
+		return data.type;
+	}
+
+	public static MessageType DetermineMessageType<T> () where T : MessageBase, new() {
+		return new T().type;
+	}
+
+	public static T Deserialize<T> (byte[] data) where T : MessageBase, new() {
+		// bytes to str.
+		var baseDataStr = Encoding.UTF8.GetString(data);
+
+		// deserialize dataStr to specific typed instance.
+		return JsonUtility.FromJson<T>(baseDataStr);
+	}
+}

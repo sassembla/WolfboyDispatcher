@@ -34,7 +34,7 @@ public class SourceEmitter : MonoBehaviour {
 		// set nested receiver.
 		var u = new WantToReceiveMessage2();
 		// remove nested receiver.
-		// Dispatchers<MessageBase>.DispatchRoute<WantToReceiveMessage1>().RemoveReceiver<Message2>(u);
+		Dispatchers<MessageBase>.DispatchRoute<WantToReceiveMessage1>().RemoveReceiver<Message2, WantToReceiveMessage2>();
 
 
 		// 擬似的なレシーブ動作

@@ -131,16 +131,15 @@ namespace WolfboyDispatcher {
                 }
             }
 
-            public void RemoveReceiver<T_MessageType> (object actionOwner) where T_MessageType : T, new() {
-                var actionOwnerType = actionOwner.GetType();
+            public void RemoveReceiver<T_MessageType, T_TypeOfReceiver> () where T_MessageType : T, new() {
                 var messageType = TypeIdentificationResolver.DetermineMessageType<T_MessageType>();
 
-                if (receiverType_messageType_actionDict.ContainsKey(actionOwnerType)) {
-                    receiverType_messageType_actionDict[actionOwnerType].Remove(messageType);
+                if (receiverType_messageType_actionDict.ContainsKey(typeof(T_TypeOfReceiver))) {
+                    receiverType_messageType_actionDict[typeof(T_TypeOfReceiver)].Remove(messageType);
                 }
 
-                if (receiverType_messageType_deserializeActionDict.ContainsKey(actionOwnerType)) {
-                    receiverType_messageType_deserializeActionDict[actionOwnerType].Remove(messageType);
+                if (receiverType_messageType_deserializeActionDict.ContainsKey(typeof(T_TypeOfReceiver))) {
+                    receiverType_messageType_deserializeActionDict[typeof(T_TypeOfReceiver)].Remove(messageType);
                 }
             }
         }

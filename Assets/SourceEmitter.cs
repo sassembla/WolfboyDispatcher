@@ -73,7 +73,7 @@ public class SourceEmitter : MonoBehaviour {
 }
 
 /**
-	この型は、特定のメッセージだけを、特定のオブザーバで受け取りたい。
+	このクラスは、特定のメッセージだけを、特定の関数で受け取りたい。
  */
 public class WantToReceiveMessage1 {
 	public WantToReceiveMessage1 () {
@@ -88,7 +88,7 @@ public class WantToReceiveMessage1 {
 	public void ReceiveMessage2 (Message2 data) {
 		Debug.LogError("ReceiveMessage2 received data:" + data.param2);
 
-		// ここでは、すでにデータがデシリアライズされてしまっている。ので、これをそのまま次のディスパッチャに渡す方法が欲しい。
+		// relay data to next downstream.
 		Dispatchers<MessageBase>.DispatchRoute<WantToReceiveMessage1>().Relay<WantToReceiveMessage2>(data);
 	}
 }

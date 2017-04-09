@@ -82,11 +82,11 @@ public class WantToReceiveMessage1 {
 	}
 
 	public void ReceiveMessage1 (Message1 data) {
-		Debug.LogError("ReceiveMessage1 received data:" + data.param);
+		Debug.Log("ReceiveMessage1 received data:" + data.param);
 	}
 
 	public void ReceiveMessage2 (Message2 data) {
-		Debug.LogError("ReceiveMessage2 received data:" + data.param2);
+		Debug.Log("ReceiveMessage2 received data:" + data.param2);
 
 		// relay data to next downstream.
 		Dispatchers<MessageBase>.DispatchRoute<WantToReceiveMessage1>().Relay<WantToReceiveMessage2>(data);
@@ -99,13 +99,13 @@ public class WantToReceiveMessage2 {
 	}
 
 	public void Receiver (Message2 data) {
-		Debug.LogError("WantToReceiveMessage2 received data:" + data.param2);
+		Debug.Log("WantToReceiveMessage2 received data:" + data.param2);
 	}
 }
 
 
 /**
-	enum定義
+	enum for data type determination.
  */
 public enum MessageType {
 	Base,

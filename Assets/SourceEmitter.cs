@@ -47,11 +47,20 @@ public class SourceEmitter : MonoBehaviour {
 		var jsonStr2 = JsonUtility.ToJson(data2);
 		var jsonBytes2 = Encoding.UTF8.GetBytes(jsonStr2);
 
+		var data3 = new Message3("hehehe");// このデータは受取手が存在しない
+		var jsonStr3 = JsonUtility.ToJson(data3);
+		var jsonBytes3 = Encoding.UTF8.GetBytes(jsonStr3);
+
 		for (var i = 0; i < 10; i++) {
 			var dataBox = jsonBytes;
-			if (i % 2 == 1) {
+
+			if (i % 3 == 1) {
 				dataBox = jsonBytes2;
 			}
+			if (i % 3 == 2) {
+				dataBox = jsonBytes3;
+			}
+			
 			Input(dataBox);
 		}
 	}
@@ -65,7 +74,33 @@ public class SourceEmitter : MonoBehaviour {
 			case BattleState.Running: {
 				// この時にイベントを受け取らせたいクラスを指定し、受け取り用に登録されているメソッドを着火する。
 				// 該当するデータ型のレシーバが登録されていなければ無視される。
-				Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().SendTo<WantToReceiveMessage1>(data);
+
+				// パターンその1、データの型を完全に無視してbyte[]のまま特定の下流型に流す。
+				// 下流では指定した型のデータのみを受け取ることができる。
+				{
+					Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().SendTo<WantToReceiveMessage1>(data);
+				}
+				
+
+				// パターンその２、ここでデシリアライズして、デシリアライズしたデータを特定の下流型に流す。
+				// この書き方だと、ここで全てのデータのデシリアライズを記述しなければいけなくてダルい(避けたくて上のパターンがある)。
+				{
+					// determine type here.
+					var deserializeType = TypeIdentificationResolver.DetermineMessageType(data);
+					switch (deserializeType) {
+						case MessageType._1: {
+							var deserializedData1 = TypeIdentificationResolver.Deserialize<Message1>(data);
+							Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().Relay<WantToReceiveMessage1>(deserializedData1);
+							break;
+						}
+						case MessageType._2: {
+							var deserializedData2 = TypeIdentificationResolver.Deserialize<Message2>(data);
+							Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().Relay<WantToReceiveMessage1>(deserializedData2);
+							break;
+						}
+					}
+				}
+				
 				break;
 			}
 		}
@@ -110,7 +145,8 @@ public class WantToReceiveMessage2 {
 public enum MessageType {
 	Base,
 	_1,
-	_2
+	_2,
+	_3
 }
 
 
@@ -142,6 +178,17 @@ public class Message2 : MessageBase {
 	}
 	public Message2 (string param2) : base (MessageType._2) {
 		this.param2 = param2;
+	}
+}
+
+// このデータは受取手が存在しない。
+public class Message3 : MessageBase {
+	public string param3;
+
+	public Message3 () : base (MessageType._3) {
+	}
+	public Message3 (string param3) : base (MessageType._3) {
+		this.param3 = param3;
 	}
 }
 

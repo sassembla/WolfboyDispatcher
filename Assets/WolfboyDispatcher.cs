@@ -2,7 +2,15 @@ using System;
 using System.Collections.Generic;
 
 /*
-    dataType : baseType という型があるときに、
+    dataType : baseType という型関係があり、
+    byte[] -> dataType(どの型かは判別不能)という状況があり、
+    なおかつ上流 -> 下流へとデータを伝える、という動作が必要で、
+    上流 <-> 下流間でのポインタ相互保持が一切ない方が嬉しくて、
+    上流ではbyte[]を流して、
+    下流では受け取りたい型を指定したい、
+
+    という場合に、WolfboyDispatcherはそれら全てのToDoを大変効率よく行うことができる。
+    
 
     upstream -> Dispatcher -> receiver<downstreamClassType>
         アップストリームからはディスパッチャ経由で特定のクラスに対してデータを流す(特にデータ型を指定せず流せる)
@@ -37,12 +45,12 @@ namespace WolfboyDispatcher {
         }
 
         public class Dispatcher {
-            
             private Dictionary<Type, Dictionary<MessageType, Action<byte[]>>> receiverType_messageType_deserializeActionDict = new Dictionary<Type, Dictionary<MessageType, Action<byte[]>>>();
             private Dictionary<Type, Dictionary<MessageType, Action<T>>> receiverType_messageType_actionDict = new Dictionary<Type, Dictionary<MessageType, Action<T>>>();
-
+            
             /**
                 セットされているレシーバーへと、byte[]を送付する
+                受け取った側ではデシリアライズが行われ、以降デシリアライズされた状態でデータが伝搬する
             */
             public void SendTo<T_TypeOfReceiver> (byte[] data) {
                 if (receiverType_messageType_deserializeActionDict.ContainsKey(typeof(T_TypeOfReceiver))) {
@@ -69,20 +77,24 @@ namespace WolfboyDispatcher {
             public void Relay<T_TypeOfReceiver> (T dataSource) {
                 if (receiverType_messageType_actionDict.ContainsKey(typeof(T_TypeOfReceiver))) {
                     var actionList = receiverType_messageType_actionDict[typeof(T_TypeOfReceiver)];
-                    foreach (var action in actionList) {
-                        // このアクションのターゲットがこのkindでなければ無視
-                        if (TypeIdentificationResolver.DetermineMessageType(dataSource) != action.Key) continue;
+                    if (actionList != null) {
+                        var messageType = TypeIdentificationResolver.DetermineMessageType(dataSource);
 
-                        // 実行
-                        action.Value(dataSource);
+                        foreach (var action in actionList) {
+                            // このアクションのターゲットがこのkindでなければ無視
+                            if (messageType != action.Key) continue;
+
+                            // 実行
+                            action.Value(dataSource);
+                        }
                     }
                 }
             }
 
             /**
-                特定の型に対して、特定のメッセージ型が来た時に実行するメソッドを登録
+                特定の型に対して、特定のデータ型が来た時に、そのデータ型をインスタンスで受け取るメソッドを登録
             */
-            public void SetReceiver<T_currentMessageType> (Action<T_currentMessageType> action) where T_currentMessageType : T, new() {
+            public void SetReceiver<T_CurrentMessage> (Action<T_CurrentMessage> action) where T_CurrentMessage : T, new() {
                 if (action.Target != null) {
                     // do nothing.
                 } else {
@@ -92,7 +104,7 @@ namespace WolfboyDispatcher {
                 var actionOwnerType = action.Target.GetType();
 
                 // determine data type.
-                var messageTypeKey = TypeIdentificationResolver.DetermineMessageType<T_currentMessageType>();
+                var messageTypeKey = TypeIdentificationResolver.DetermineMessageType<T_CurrentMessage>();
 
                 {
                     if (!receiverType_messageType_actionDict.ContainsKey(actionOwnerType)) {
@@ -105,7 +117,7 @@ namespace WolfboyDispatcher {
                     */
                     Action<T> executeAct = deserializedData => {
                         // execute act.
-                        action((T_currentMessageType)deserializedData);
+                        action((T_CurrentMessage)deserializedData);
                     };
                     
                     receiverType_messageType_actionDict[actionOwnerType][messageTypeKey] = executeAct;
@@ -121,10 +133,10 @@ namespace WolfboyDispatcher {
                         byte -> data type -> execute action.
                     */
                     Action<byte[]> deserializeAndExecuteAct = baseDataBytes => {
-                        var receivedData = TypeIdentificationResolver.Deserialize<T_currentMessageType>(baseDataBytes);
+                        var receivedData = TypeIdentificationResolver.Deserialize<T_CurrentMessage>(baseDataBytes);
 
                         // execute act.
-                        action((T_currentMessageType)receivedData);
+                        action((T_CurrentMessage)receivedData);
                     };
 
                     receiverType_messageType_deserializeActionDict[actionOwnerType][messageTypeKey] = deserializeAndExecuteAct;

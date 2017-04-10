@@ -2,6 +2,8 @@
 
 ver 1.0.0
 
+![wbd](./doc/wbd.png)
+
 dataType : baseType というデータ型があるときに、upstreamからdownstreamへと、
 **受取手指定をしつつ、データの型特定をせずに、**
 データを流すことができる、ディスパッチャ。

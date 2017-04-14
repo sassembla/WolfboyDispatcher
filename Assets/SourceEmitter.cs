@@ -78,7 +78,7 @@ public class SourceEmitter : MonoBehaviour {
 				// パターンその1、データの型を完全に無視してbyte[]のまま特定の下流型に流す。
 				// 下流では指定した型のデータのみを受け取ることができる。
 				{
-					Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().SendTo<WantToReceiveMessage1>(data);
+					Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().SendTo(data, typeof(WantToReceiveMessage1));
 				}
 				
 
@@ -90,12 +90,12 @@ public class SourceEmitter : MonoBehaviour {
 					switch (deserializeType) {
 						case MessageType._1: {
 							var deserializedData1 = TypeIdentificationResolver.Deserialize<Message1>(data);
-							Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().Relay<WantToReceiveMessage1>(deserializedData1);
+							Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().Relay(deserializedData1, typeof(WantToReceiveMessage1));
 							break;
 						}
 						case MessageType._2: {
 							var deserializedData2 = TypeIdentificationResolver.Deserialize<Message2>(data);
-							Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().Relay<WantToReceiveMessage1>(deserializedData2);
+							Dispatchers<MessageBase>.DispatchRoute<SourceEmitter>().Relay(deserializedData2, typeof(WantToReceiveMessage1));
 							break;
 						}
 					}
@@ -124,7 +124,7 @@ public class WantToReceiveMessage1 {
 		Debug.Log("ReceiveMessage2 received data:" + data.param2);
 
 		// relay data to next downstream.
-		Dispatchers<MessageBase>.DispatchRoute<WantToReceiveMessage1>().Relay<WantToReceiveMessage2>(data);
+		Dispatchers<MessageBase>.DispatchRoute<WantToReceiveMessage1>().Relay(data, typeof(WantToReceiveMessage2));
 	}
 }
 

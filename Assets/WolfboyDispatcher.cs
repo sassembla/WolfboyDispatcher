@@ -52,20 +52,21 @@ namespace WolfboyDispatcher {
                 セットされているレシーバーへと、byte[]を送付する
                 受け取った側ではデシリアライズが行われ、以降デシリアライズされた状態でデータが伝搬する
             */
-            public void SendTo<T_TypeOfReceiver> (byte[] data) {
-                if (receiverType_messageType_deserializeActionDict.ContainsKey(typeof(T_TypeOfReceiver))) {
-                    var actionList = receiverType_messageType_deserializeActionDict[typeof(T_TypeOfReceiver)];
-                    if (actionList != null) {
+            public void SendTo (byte[] data, params Type[] targetReceiverTypes) {
+                // メッセージ型の特定
+                var messageType = TypeIdentificationResolver.DetermineMessageType(data);
+                
+                foreach (var targetReceiverType in targetReceiverTypes) {
+                    if (receiverType_messageType_deserializeActionDict.ContainsKey(targetReceiverType)) {
+                        var actionList = receiverType_messageType_deserializeActionDict[targetReceiverType];
+                        if (actionList != null) {
+                            foreach (var action in actionList) {
+                                // このアクションのターゲットがこのデータの形式にマッチしなければ無視
+                                if (messageType != action.Key) continue;
 
-                        // メッセージ型の特定
-                        var messageType = TypeIdentificationResolver.DetermineMessageType(data);
-                        
-                        foreach (var action in actionList) {
-                            // このアクションのターゲットがこのデータの形式にマッチしなければ無視
-                            if (messageType != action.Key) continue;
-
-                            // 実行
-                            action.Value(data);
+                                // 実行
+                                action.Value(data);
+                            }
                         }
                     }
                 }
@@ -74,12 +75,13 @@ namespace WolfboyDispatcher {
             /**
                 デシリアライズが済んでいるデータをそのまま次のディスパッチャへと伝える
             */
-            public void Relay<T_TypeOfReceiver> (T dataSource) {
-                if (receiverType_messageType_actionDict.ContainsKey(typeof(T_TypeOfReceiver))) {
-                    var actionList = receiverType_messageType_actionDict[typeof(T_TypeOfReceiver)];
-                    if (actionList != null) {
-                        var messageType = TypeIdentificationResolver.DetermineMessageType(dataSource);
+            public void Relay (T dataSource, params Type[] targetReceiverTypes) {
+                // メッセージ型の特定
+                var messageType = TypeIdentificationResolver.DetermineMessageType(dataSource);
 
+                foreach (var targetReceiverType in targetReceiverTypes) {
+                    if (receiverType_messageType_actionDict.ContainsKey(targetReceiverType)) {
+                        var actionList = receiverType_messageType_actionDict[targetReceiverType];
                         foreach (var action in actionList) {
                             // このアクションのターゲットがこのkindでなければ無視
                             if (messageType != action.Key) continue;
